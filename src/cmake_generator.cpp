@@ -1384,13 +1384,19 @@ void generate_cmake(const char *path, const parser::Project *parent_project) {
             }
             merge_sources(target.sources);
 
+            // Generated outputs commonly live under the binary directory, which is not necessarily
+            // nested inside the source directory (e.g. out-of-tree builds). Track them separately so
+            // they can be excluded from the source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} ...) call below.
+            std::vector<std::string> generated_output_sources;
             for (const auto &custom_command : custom_commands) {
                 if (!custom_command.is_output_form()) {
                     continue;
                 }
                 auto &condition_sources = msources[custom_command.condition];
                 for (const auto &output : custom_command.outputs) {
-                    condition_sources.insert(normalize_generated_output_source(output));
+                    auto normalized_output = normalize_generated_output_source(output);
+                    condition_sources.insert(normalized_output);
+                    generated_output_sources.push_back(std::move(normalized_output));
                     if (resolved_target_type == parser::target_custom) {
                         mcustom_target_depends[custom_command.condition].insert(output);
                     }
@@ -1747,7 +1753,16 @@ void generate_cmake(const char *path, const parser::Project *parent_project) {
 
             // TODO: support sources from other directories
             if (has_sources) {
-                cmd("source_group")("TREE", "${CMAKE_CURRENT_SOURCE_DIR}", "FILES", "${" + sources_var + "}").endl();
+                if (generated_output_sources.empty()) {
+                    cmd("source_group")("TREE", "${CMAKE_CURRENT_SOURCE_DIR}", "FILES", "${" + sources_var + "}").endl();
+                } else {
+                    // Generated outputs may live under the binary directory, which source_group(TREE ...) requires
+                    // to be nested inside CMAKE_CURRENT_SOURCE_DIR. Exclude them instead of failing the configure.
+                    auto source_group_var = target.name + "_SOURCE_GROUP_FILES";
+                    cmd("set")(source_group_var, "${" + sources_var + "}").endl();
+                    cmd("list")("REMOVE_ITEM", source_group_var, generated_output_sources).endl();
+                    cmd("source_group")("TREE", "${CMAKE_CURRENT_SOURCE_DIR}", "FILES", "${" + source_group_var + "}").endl();
+                }
             }
 
             if (!target.alias.empty()) {
