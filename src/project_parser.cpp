@@ -617,14 +617,19 @@ Project::Project(const Project *parent, const std::string &path, bool build) : p
                         // Arrays become semicolon-separated lists
                         std::string list_value;
                         for (const auto &list_val : optItr.second.as_array()) {
+                            if (!list_val.is_string()) {
+                                throw_key_error("Expected an array of strings", optItr.first, list_val);
+                            }
                             if (!list_value.empty()) {
                                 list_value += ';';
                             }
                             list_value += list_val.as_string();
                         }
                         opt.value = list_value;
-                    } else {
+                    } else if (optItr.second.is_string()) {
                         opt.value = optItr.second.as_string();
+                    } else {
+                        throw_key_error("Expected a boolean, string, or array of strings", optItr.first, optItr.second);
                     }
                     content.options.emplace(optItr.first, opt);
                 }
