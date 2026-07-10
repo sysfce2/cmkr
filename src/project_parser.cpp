@@ -759,6 +759,8 @@ Project::Project(const Project *parent, const std::string &path, bool build) : p
             throw_key_error(error, target.type_name, t.find("type"));
         }
 
+        const auto resolved_target_type = resolve_target_type(target, templates);
+
         t.optional("sources", target.sources);
 
         // Merge the headers into the sources
@@ -771,64 +773,66 @@ Project::Project(const Project *parent, const std::string &path, bool build) : p
             }
         }
 
-        t.optional("compile-definitions", target.compile_definitions);
-        t.optional("private-compile-definitions", target.private_compile_definitions);
+        // These keys configure compilation/linking, which doesn't apply to add_custom_target. Leaving them
+        // unvisited for type = "custom" lets the generic "Unknown key" check below reject them.
+        if (resolved_target_type != target_custom) {
+            t.optional("compile-definitions", target.compile_definitions);
+            t.optional("private-compile-definitions", target.private_compile_definitions);
 
-        t.optional("compile-features", target.compile_features);
-        t.optional("private-compile-features", target.private_compile_features);
+            t.optional("compile-features", target.compile_features);
+            t.optional("private-compile-features", target.private_compile_features);
 
-        t.optional("compile-options", target.compile_options);
-        t.optional("private-compile-options", target.private_compile_options);
+            t.optional("compile-options", target.compile_options);
+            t.optional("private-compile-options", target.private_compile_options);
 
-        t.optional("include-directories", target.include_directories);
-        t.optional("private-include-directories", target.private_include_directories);
+            t.optional("include-directories", target.include_directories);
+            t.optional("private-include-directories", target.private_include_directories);
 
-        t.optional("link-directories", target.link_directories);
-        t.optional("private-link-directories", target.private_link_directories);
+            t.optional("link-directories", target.link_directories);
+            t.optional("private-link-directories", target.private_link_directories);
 
-        t.optional("link-libraries", target.link_libraries);
-        t.optional("private-link-libraries", target.private_link_libraries);
+            t.optional("link-libraries", target.link_libraries);
+            t.optional("private-link-libraries", target.private_link_libraries);
 
-        // Add support for relative paths for (private-)link-libraries
-        const auto fix_relative_paths = [&name, &path](ConditionVector &libraries, const char *key) {
-            for (const auto &library_entries : libraries) {
-                for (auto &library : libraries[library_entries.first]) {
-                    // Skip processing paths with potential CMake macros in them (this check isn't perfect)
-                    // https://cmake.org/cmake/help/latest/manual/cmake-language.7.html#variable-references
-                    if ((library.find("${") != std::string::npos || library.find("$ENV{") != std::string::npos ||
-                         library.find("$CACHE{") != std::string::npos) &&
-                        library.find('}') != std::string::npos) {
-                        continue;
-                    }
-
-                    auto library_path = fs::path(path) / library;
-                    if (fs::exists(library_path)) {
-                        if (!fs::is_directory(library_path)) {
-                            // If the file path is relative (and not a directory), prepend ${CMAKE_CURRENT_SOURCE_DIR}
-                            library.insert(0, "${CMAKE_CURRENT_SOURCE_DIR}/");
+            // Add support for relative paths for (private-)link-libraries
+            const auto fix_relative_paths = [&name, &path](ConditionVector &libraries, const char *key) {
+                for (const auto &library_entries : libraries) {
+                    for (auto &library : libraries[library_entries.first]) {
+                        // Skip processing paths with potential CMake macros in them (this check isn't perfect)
+                        // https://cmake.org/cmake/help/latest/manual/cmake-language.7.html#variable-references
+                        if ((library.find("${") != std::string::npos || library.find("$ENV{") != std::string::npos ||
+                             library.find("$CACHE{") != std::string::npos) &&
+                            library.find('}') != std::string::npos) {
+                            continue;
                         }
-                    } else if (library.find_first_of(R"(\/)") != std::string::npos) {
-                        // Error if the path contains a directory separator and the file doesn't exist
-                        throw std::runtime_error("Attempted to link against a library file that doesn't exist for target \"" + name + "\" in \"" +
-                                                 key + "\": " + library);
-                    } else {
-                        // NOTE: We cannot check if system libraries exist, so we leave them as-is
+
+                        auto library_path = fs::path(path) / library;
+                        if (fs::exists(library_path)) {
+                            if (!fs::is_directory(library_path)) {
+                                // If the file path is relative (and not a directory), prepend ${CMAKE_CURRENT_SOURCE_DIR}
+                                library.insert(0, "${CMAKE_CURRENT_SOURCE_DIR}/");
+                            }
+                        } else if (library.find_first_of(R"(\/)") != std::string::npos) {
+                            // Error if the path contains a directory separator and the file doesn't exist
+                            throw std::runtime_error("Attempted to link against a library file that doesn't exist for target \"" + name + "\" in \"" +
+                                                     key + "\": " + library);
+                        } else {
+                            // NOTE: We cannot check if system libraries exist, so we leave them as-is
+                        }
                     }
                 }
-            }
-        };
-        fix_relative_paths(target.link_libraries, "link-libraries");
-        fix_relative_paths(target.private_link_libraries, "private-link-libraries");
+            };
+            fix_relative_paths(target.link_libraries, "link-libraries");
+            fix_relative_paths(target.private_link_libraries, "private-link-libraries");
 
-        t.optional("link-options", target.link_options);
-        t.optional("private-link-options", target.private_link_options);
+            t.optional("link-options", target.link_options);
+            t.optional("private-link-options", target.private_link_options);
 
-        t.optional("precompile-headers", target.precompile_headers);
-        t.optional("private-precompile-headers", target.private_precompile_headers);
+            t.optional("precompile-headers", target.precompile_headers);
+            t.optional("private-precompile-headers", target.private_precompile_headers);
+        }
 
         t.optional("dependencies", target.dependencies);
-
-        const auto resolved_target_type = resolve_target_type(target, templates);
 
         if (t.contains("all")) {
             target.custom_target.has_all = true;
