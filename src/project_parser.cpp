@@ -1012,6 +1012,9 @@ Project::Project(const Project *parent, const std::string &path, bool build) : p
                     if (resolved_target_type == target_interface) {
                         throw_key_error("build-event cannot be used with type = \"interface\"", "build-event", custom.find("build-event"));
                     }
+                    if (resolved_target_type == target_object) {
+                        throw_key_error("build-event cannot be used with type = \"object\"", "build-event", custom.find("build-event"));
+                    }
                     if (resolved_target_type == target_custom && custom_command.build_event == "PRE_LINK") {
                         throw_key_error("build-event = \"pre-link\" cannot be used with type = \"custom\"", "build-event",
                                         custom.find("build-event"));
