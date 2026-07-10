@@ -24,6 +24,7 @@ description = "Demonstrates protobuf integration with cmkr custom commands"
 [fetch-content.protobuf]
 git = "https://github.com/protocolbuffers/protobuf"
 tag = "v21.12"
+shallow = true
 options = {
   protobuf_BUILD_TESTS = false,
   protobuf_BUILD_EXAMPLES = false,
