@@ -107,14 +107,21 @@ static std::vector<fs::path> expand_cmake_path(const fs::path &source_path, cons
 
     std::vector<fs::path> paths;
     if (stem == "*") {
-        for (const auto &f : fs::directory_iterator(toml_dir / source_path.parent_path(), fs::directory_options::follow_directory_symlink)) {
+        const auto directory = toml_dir / source_path.parent_path();
+        if (!fs::is_directory(directory)) {
+            throw std::runtime_error("Source directory not found: " + source_path.parent_path().string());
+        }
+        for (const auto &f : fs::directory_iterator(directory, fs::directory_options::follow_directory_symlink)) {
             if (!f.is_directory() && has_extension(f.path(), extension)) {
                 paths.push_back(fs::relative(f, toml_dir));
             }
         }
     } else if (stem == "**") {
-        for (const auto &f :
-             fs::recursive_directory_iterator(toml_dir / source_path.parent_path(), fs::directory_options::follow_directory_symlink)) {
+        const auto directory = toml_dir / source_path.parent_path();
+        if (!fs::is_directory(directory)) {
+            throw std::runtime_error("Source directory not found: " + source_path.parent_path().string());
+        }
+        for (const auto &f : fs::recursive_directory_iterator(directory, fs::directory_options::follow_directory_symlink)) {
             if (!f.is_directory() && has_extension(f.path(), extension)) {
                 paths.push_back(fs::relative(f, toml_dir));
             }
